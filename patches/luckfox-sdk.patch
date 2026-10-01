@@ -1,0 +1,1142 @@
+diff --git a/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/isp_iqfiles/mis5001_CMK-OT2115-PC1_30IRC-F16.json b/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/isp_iqfiles/mis5001_CMK-OT2115-PC1_30IRC-F16.json
+index 3a6c7b17b..219adda24 100644
+--- a/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/isp_iqfiles/mis5001_CMK-OT2115-PC1_30IRC-F16.json
++++ b/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/isp_iqfiles/mis5001_CMK-OT2115-PC1_30IRC-F16.json
+@@ -2047,7 +2047,7 @@
+ 						},
+ 						"lsc_v2":	{
+ 							"common":	{
+-								"enable":	1,
++								"enable":	0,
+ 								"resolutionAll":	[{
+ 										"name":	"2592x1944",
+ 										"lsc_sect_size_x":	[162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162],
+diff --git a/project/app/rkipc/rkipc/src/rv1103_ipc/CMakeLists.txt b/project/app/rkipc/rkipc/src/rv1103_ipc/CMakeLists.txt
+index 1180651a9..bc327f4ae 100644
+--- a/project/app/rkipc/rkipc/src/rv1103_ipc/CMakeLists.txt
++++ b/project/app/rkipc/rkipc/src/rv1103_ipc/CMakeLists.txt
+@@ -68,6 +68,7 @@ target_link_libraries(${PROJECT_NAME} pthread rockit rockchip_mpp rkaiq rtsp rka
+ install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
+ install(FILES rkipc-300w.ini DESTINATION share)
+ install(FILES rkipc-400w.ini DESTINATION share)
++install(FILES rkipc-mis5001-400w.ini DESTINATION share)
+ install(FILES ../../common/speaker_test.wav DESTINATION share)
+ install(PROGRAMS RkLunch.sh DESTINATION bin)
+ install(PROGRAMS RkLunch-stop.sh DESTINATION bin)
+diff --git a/project/app/rkipc/rkipc/src/rv1103_ipc/RkLunch.sh b/project/app/rkipc/rkipc/src/rv1103_ipc/RkLunch.sh
+index 13128949a..cf5bda3c3 100644
+--- a/project/app/rkipc/rkipc/src/rv1103_ipc/RkLunch.sh
++++ b/project/app/rkipc/rkipc/src/rv1103_ipc/RkLunch.sh
+@@ -73,9 +73,9 @@ post_chk() {
+ 	default_rkipc_ini=/tmp/rkipc-factory-config.ini
+ 
+ 	if [ ! -f "/oem/usr/share/rkipc.ini" ]; then
+-		lsmod | grep sc530ai
++		lsmod | grep -qw mis5001
+ 		if [ $? -eq 0 ]; then
+-			ln -s -f /oem/usr/share/rkipc-500w.ini $default_rkipc_ini
++			ln -s -f /oem/usr/share/rkipc-mis5001-400w.ini $default_rkipc_ini
+ 		fi
+ 		lsmod | grep sc4336
+ 		if [ $? -eq 0 ]; then
+diff --git a/project/build.sh b/project/build.sh
+index 18552ca28..940c50314 100755
+--- a/project/build.sh
++++ b/project/build.sh
+@@ -1417,8 +1417,14 @@ function __PACKAGE_RESOURCES() {
+ 	if [ -n "$RK_CAMERA_SENSOR_IQFILES" ]; then
+ 		IFS=" "
+ 		for item in $(echo $RK_CAMERA_SENSOR_IQFILES); do
+-			if [ -f "$RK_PROJECT_PATH_MEDIA/isp_iqfiles/$item" ]; then
+-				cp -rfa $RK_PROJECT_PATH_MEDIA/isp_iqfiles/$item $_iqfiles_dir
++			# Use the patched SDK IQ source when repackaging a prebuilt media release.
++			# media_out can otherwise retain the original IQ with LSC enabled.
++			if [ "$item" = "mis5001_CMK-OT2115-PC1_30IRC-F16.json" ]; then
++				_iqfile_src="$SDK_MEDIA_DIR/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/isp_iqfiles/$item"
++				[ -f "$_iqfile_src" ] || { msg_error "Missing $_iqfile_src"; exit 1; }
++				cp -f "$_iqfile_src" "$_iqfiles_dir/$item"
++			elif [ -f "$RK_PROJECT_PATH_MEDIA/isp_iqfiles/$item" ]; then
++				cp -rfa "$RK_PROJECT_PATH_MEDIA/isp_iqfiles/$item" "$_iqfiles_dir"
+ 			fi
+ 		done
+ 		IFS=
+diff --git a/project/cfg/BoardConfig_IPC/BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico-IPC.mk b/project/cfg/BoardConfig_IPC/BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico-IPC.mk
+index 994b379e7..63157d212 100755
+--- a/project/cfg/BoardConfig_IPC/BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico-IPC.mk
++++ b/project/cfg/BoardConfig_IPC/BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico-IPC.mk
+@@ -87,7 +87,7 @@ export RK_KERNEL_DEFCONFIG=luckfox_rv1106_linux_defconfig
+ # RK_CAMERA_SENSOR_IQFILES format:
+ #     "iqfile1 iqfile2 iqfile3 ..."
+ # ./build.sh media and copy <SDK root dir>/output/out/media_out/isp_iqfiles/$RK_CAMERA_SENSOR_IQFILES
+-export RK_CAMERA_SENSOR_IQFILES="sc4336_OT01_40IRC_F16.json sc3336_CMK-OT2119-PC1_30IRC-F16.json"
++export RK_CAMERA_SENSOR_IQFILES="mis5001_CMK-OT2115-PC1_30IRC-F16.json"
+ #export RK_CAMERA_SENSOR_IQFILES="sc4336_OT01_40IRC_F16.json sc3336_CMK-OT2119-PC1_30IRC-F16.json sc530ai_CMK-OT2115-PC1_30IRC-F16.json"
+ 
+ # Config sensor lens CAC calibrattion bin files
+diff --git a/sysdrv/source/kernel/arch/arm/boot/dts/rv1103-luckfox-pico-ipc.dtsi b/sysdrv/source/kernel/arch/arm/boot/dts/rv1103-luckfox-pico-ipc.dtsi
+index d7b50e115..a02f6d782 100755
+--- a/sysdrv/source/kernel/arch/arm/boot/dts/rv1103-luckfox-pico-ipc.dtsi
++++ b/sysdrv/source/kernel/arch/arm/boot/dts/rv1103-luckfox-pico-ipc.dtsi
+@@ -147,7 +147,7 @@ csi_dphy_input1: endpoint@1 {
+ 
+ 			csi_dphy_input2: endpoint@2 {
+ 				reg = <2>;
+-				remote-endpoint = <&sc530ai_out>;
++				remote-endpoint = <&mis5001_out>;
+ 				data-lanes = <1 2>;
+ 			};
+ 		};
+@@ -213,10 +213,10 @@ sc4336_out: endpoint {
+ 		};
+ 	};
+ 
+-	sc530ai: sc530ai@30 {
+-		compatible = "smartsens,sc530ai";
++	mis5001: mis5001@31 {
++		compatible = "imagedesign,mis5001";
+ 		status = "okay";
+-		reg = <0x30>;
++		reg = <0x31>;
+ 		clocks = <&cru MCLK_REF_MIPI0>;
+ 		clock-names = "xvclk";
+ 		pwdn-gpios = <&gpio3 RK_PC5 GPIO_ACTIVE_HIGH>;
+@@ -227,7 +227,7 @@ sc530ai: sc530ai@30 {
+ 		rockchip,camera-module-name = "CMK-OT2115-PC1";
+ 		rockchip,camera-module-lens-name = "30IRC-F16";
+ 		port {
+-			sc530ai_out: endpoint {
++			mis5001_out: endpoint {
+ 				remote-endpoint = <&csi_dphy_input2>;
+ 				data-lanes = <1 2>;
+ 			};
+diff --git a/sysdrv/source/kernel/drivers/media/i2c/mis5001.c b/sysdrv/source/kernel/drivers/media/i2c/mis5001.c
+index e19f36568..98a9d5b50 100644
+--- a/sysdrv/source/kernel/drivers/media/i2c/mis5001.c
++++ b/sysdrv/source/kernel/drivers/media/i2c/mis5001.c
+@@ -35,9 +35,10 @@
+ 
+ #define MIS5001_LANES			2
+ #define MIS5001_BITS_PER_SAMPLE		10
+-#define MIS5001_LINK_FREQ		445500000  //891Mbps  Mbps/2 = MHz
+-#define PIXEL_RATE_WITH_337M_10BIT	(MIS5001_LINK_FREQ * 2 * \
+-                            MIS5001_LANES / MIS5001_BITS_PER_SAMPLE)
++#define MIS5001_LINK_FREQ_5MP		445500000LL
++#define MIS5001_LINK_FREQ_4MP		300000000LL
++#define MIS5001_PIXEL_RATE_4MP	100000000LL
++#define MIS5001_PIXEL_RATE_5MP	178200000LL
+ #define MIS5001_XVCLK_FREQ		    27000000
+ 
+ #define MIS5001_CHIP_ID			0x1311
+@@ -107,6 +108,8 @@ struct regval {
+ 
+ struct mis5001_mode {
+ 	u32 bus_fmt;
++	s64 link_freq;
++	u32 bits_per_sample;
+ 	u32 width;
+ 	u32 height;
+ 	struct v4l2_fract max_fps;
+@@ -135,6 +138,8 @@ struct mis5001 {
+ 	struct v4l2_ctrl	*exposure;
+ 	struct v4l2_ctrl	*anal_gain;
+ 	struct v4l2_ctrl	*digi_gain;
++	struct v4l2_ctrl	*link_freq;
++	struct v4l2_ctrl	*pixel_rate;
+ 	struct v4l2_ctrl	*hblank;
+ 	struct v4l2_ctrl	*vblank;
+ 	struct v4l2_ctrl	*test_pattern;
+@@ -355,14 +360,395 @@ static const struct regval mis5001_linear_10_2592x1944_regs[] = {
+ 	{REG_NULL, 0x00},
+ };
+ 
++/* OpenIPC MIS5001 2560x1440 25fps register sequence. */
++static const struct regval mis5001_linear_12_2560x1440_25fps_regs[] = {
++	{0x300a, 0x01},
++	{0x3006, 0x02},
++	{0x4240, 0x8c},
++	{0x4100, 0x04},
++	{0x4101, 0xff},
++	{0x4103, 0xff},
++	{0x4220, 0x2c},
++	{0x4221, 0x6c},
++	{0x4222, 0xac},
++	{0x4223, 0xec},
++	{0x3011, 0x2c},
++	{0x3f00, 0x01},
++	{0x3f02, 0x07},
++	{0x3f01, 0x00},
++	{0x3f04, 0x2a},
++	{0x3f03, 0x00},
++	{0x3f06, 0x6d},
++	{0x3f05, 0x04},
++	{0x3f08, 0xff},
++	{0x3f07, 0x1f},
++	{0x3f0a, 0xa4},
++	{0x3f09, 0x01},
++	{0x3f0c, 0x38},
++	{0x3f0b, 0x00},
++	{0x3f0e, 0xff},
++	{0x3f0d, 0x1f},
++	{0x3f10, 0xff},
++	{0x3f0f, 0x1f},
++	{0x3f13, 0x07},
++	{0x3f12, 0x00},
++	{0x3f15, 0x9d},
++	{0x3f14, 0x01},
++	{0x3f17, 0x31},
++	{0x3f16, 0x00},
++	{0x3f19, 0x73},
++	{0x3f18, 0x01},
++	{0x3f1b, 0x00},
++	{0x3f1a, 0x00},
++	{0x3f1d, 0x71},
++	{0x3f1c, 0x04},
++	{0x3f1f, 0xff},
++	{0x3f1e, 0x1f},
++	{0x3f21, 0xff},
++	{0x3f20, 0x1f},
++	{0x3f23, 0x85},
++	{0x3f22, 0x00},
++	{0x3f25, 0x26},
++	{0x3f24, 0x01},
++	{0x3f28, 0x46},
++	{0x3f27, 0x00},
++	{0x3f2a, 0x07},
++	{0x3f29, 0x00},
++	{0x3f2c, 0x3f},
++	{0x3f2b, 0x00},
++	{0x3f2e, 0x6f},
++	{0x3f2d, 0x01},
++	{0x3f30, 0x38},
++	{0x3f2f, 0x00},
++	{0x3f32, 0x3f},
++	{0x3f31, 0x00},
++	{0x3f34, 0xd1},
++	{0x3f33, 0x00},
++	{0x3f36, 0xc5},
++	{0x3f35, 0x00},
++	{0x3f38, 0xf7},
++	{0x3f37, 0x01},
++	{0x3f3a, 0x73},
++	{0x3f39, 0x02},
++	{0x3f4f, 0x73},
++	{0x3f4e, 0x02},
++	{0x3f51, 0x73},
++	{0x3f50, 0x02},
++	{0x3f53, 0x73},
++	{0x3f52, 0x02},
++	{0x3f55, 0x73},
++	{0x3f54, 0x02},
++	{0x3f3c, 0x9a},
++	{0x3f3b, 0x00},
++	{0x3f3e, 0xd0},
++	{0x3f3d, 0x03},
++	{0x3f40, 0x92},
++	{0x3f3f, 0x01},
++	{0x3f42, 0x58},
++	{0x3f41, 0x00},
++	{0x3f44, 0x77},
++	{0x3f43, 0x04},
++	{0x3129, 0x38},
++	{0x3128, 0x00},
++	{0x312b, 0x3d},
++	{0x312a, 0x00},
++	{0x312f, 0x91},
++	{0x312e, 0x00},
++	{0x3124, 0x0e},
++	{0x4200, 0x09},
++	{0x4201, 0x00},
++	{0x420e, 0x69},
++	{0x420f, 0x26},
++	{0x4240, 0x8d},
++	{0x4242, 0x03},
++	{0x4224, 0x00},
++	{0x4225, 0x0a},
++	{0x4226, 0xa0},
++	{0x4227, 0x05},
++	{0x4228, 0x00},
++	{0x4229, 0x0a},
++	{0x422a, 0xa0},
++	{0x422b, 0x05},
++	{0x422c, 0x00},
++	{0x422d, 0x0a},
++	{0x422e, 0xa0},
++	{0x422f, 0x05},
++	{0x4230, 0x00},
++	{0x4231, 0x0a},
++	{0x4232, 0xa0},
++	{0x4233, 0x05},
++	{0x4509, 0x0f},
++	{0x4505, 0x00},
++	{0x4501, 0xff},
++	{0x4502, 0x33},
++	{0x4503, 0x11},
++	{0x4501, 0xf0},
++	{0x4502, 0x30},
++	{0x4503, 0x10},
++	{0x3f3a, 0x2a},
++	{0x3f4f, 0x2b},
++	{0x3f51, 0x2e},
++	{0x3f53, 0x34},
++	{0x3f55, 0x38},
++	{0x4004, 0xd9},
++	{0x3a01, 0xc0},
++	{0x401e, 0x3c},
++	{0x401d, 0xa0},
++	{0x3f49, 0x70},
++	{0x3012, 0x03},
++	{0x3500, 0x13},
++	{0x3501, 0x03},
++	{0x3e00, 0x01},
++	{0x400d, 0x30},
++	{0x3508, 0x04},
++	{0x3513, 0x01},
++	{0x3514, 0x09},
++	{0x3515, 0x0b},
++	{0x3702, 0x80},
++	{0x3704, 0x80},
++	{0x3706, 0x80},
++	{0x3708, 0x80},
++	{0x3f36, 0xcd},
++	{0x400d, 0x30},
++	{0x4004, 0x68},
++	{0x4009, 0x09},
++	{0x400a, 0x48},
++	{0x3f0c, 0x30},
++	{0x3306, 0x01},
++	{0x3307, 0x84},
++	{0x3309, 0x01},
++	{0x3308, 0x04},
++	{0x3302, 0x00},
++	{0x330a, 0x07},
++	{0x330b, 0x07},
++	{0x310f, 0x78},
++	{0x310e, 0x0f},
++	{0x310d, 0xdc},
++	{0x310c, 0x05},
++	{0x3115, 0x10},
++	{0x3114, 0x00},
++	{0x3117, 0x0f},
++	{0x3116, 0x0a},
++	{0x3111, 0xfc},
++	{0x3110, 0x00},
++	{0x3113, 0x9d},
++	{0x3112, 0x06},
++	{0x3006, 0x00},
++	{REG_NULL, 0x00},
++};
++
++/* OpenIPC MIS5001 2560x1440 30fps register sequence. */
++static const struct regval mis5001_linear_12_2560x1440_30fps_regs[] = {
++	{0x300a, 0x01},
++	{0x3006, 0x02},
++	{0x4240, 0x8c},
++	{0x4100, 0x04},
++	{0x4101, 0xff},
++	{0x4103, 0xff},
++	{0x4220, 0x2c},
++	{0x4221, 0x6c},
++	{0x4222, 0xac},
++	{0x4223, 0xec},
++	{0x3011, 0x2c},
++	{0x3f00, 0x01},
++	{0x3f02, 0x07},
++	{0x3f01, 0x00},
++	{0x3f04, 0x2a},
++	{0x3f03, 0x00},
++	{0x3f06, 0x6d},
++	{0x3f05, 0x04},
++	{0x3f08, 0xff},
++	{0x3f07, 0x1f},
++	{0x3f0a, 0xa4},
++	{0x3f09, 0x01},
++	{0x3f0c, 0x38},
++	{0x3f0b, 0x00},
++	{0x3f0e, 0xff},
++	{0x3f0d, 0x1f},
++	{0x3f10, 0xff},
++	{0x3f0f, 0x1f},
++	{0x3f13, 0x07},
++	{0x3f12, 0x00},
++	{0x3f15, 0x9d},
++	{0x3f14, 0x01},
++	{0x3f17, 0x31},
++	{0x3f16, 0x00},
++	{0x3f19, 0x73},
++	{0x3f18, 0x01},
++	{0x3f1b, 0x00},
++	{0x3f1a, 0x00},
++	{0x3f1d, 0x71},
++	{0x3f1c, 0x04},
++	{0x3f1f, 0xff},
++	{0x3f1e, 0x1f},
++	{0x3f21, 0xff},
++	{0x3f20, 0x1f},
++	{0x3f23, 0x85},
++	{0x3f22, 0x00},
++	{0x3f25, 0x26},
++	{0x3f24, 0x01},
++	{0x3f28, 0x46},
++	{0x3f27, 0x00},
++	{0x3f2a, 0x07},
++	{0x3f29, 0x00},
++	{0x3f2c, 0x3f},
++	{0x3f2b, 0x00},
++	{0x3f2e, 0x6f},
++	{0x3f2d, 0x01},
++	{0x3f30, 0x38},
++	{0x3f2f, 0x00},
++	{0x3f32, 0x3f},
++	{0x3f31, 0x00},
++	{0x3f34, 0xd1},
++	{0x3f33, 0x00},
++	{0x3f36, 0xc5},
++	{0x3f35, 0x00},
++	{0x3f38, 0xf7},
++	{0x3f37, 0x01},
++	{0x3f3a, 0x73},
++	{0x3f39, 0x02},
++	{0x3f4f, 0x73},
++	{0x3f4e, 0x02},
++	{0x3f51, 0x73},
++	{0x3f50, 0x02},
++	{0x3f53, 0x73},
++	{0x3f52, 0x02},
++	{0x3f55, 0x73},
++	{0x3f54, 0x02},
++	{0x3f3c, 0x9a},
++	{0x3f3b, 0x00},
++	{0x3f3e, 0xd0},
++	{0x3f3d, 0x03},
++	{0x3f40, 0x92},
++	{0x3f3f, 0x01},
++	{0x3f42, 0x58},
++	{0x3f41, 0x00},
++	{0x3f44, 0x77},
++	{0x3f43, 0x04},
++	{0x3129, 0x38},
++	{0x3128, 0x00},
++	{0x312b, 0x3d},
++	{0x312a, 0x00},
++	{0x312f, 0x91},
++	{0x312e, 0x00},
++	{0x3124, 0x0e},
++	{0x4200, 0x09},
++	{0x4201, 0x00},
++	{0x420e, 0x69},
++	{0x420f, 0x26},
++	{0x4240, 0x8d},
++	{0x4242, 0x03},
++	{0x4224, 0x00},
++	{0x4225, 0x0a},
++	{0x4226, 0xa0},
++	{0x4227, 0x05},
++	{0x4228, 0x00},
++	{0x4229, 0x0a},
++	{0x422a, 0xa0},
++	{0x422b, 0x05},
++	{0x422c, 0x00},
++	{0x422d, 0x0a},
++	{0x422e, 0xa0},
++	{0x422f, 0x05},
++	{0x4230, 0x00},
++	{0x4231, 0x0a},
++	{0x4232, 0xa0},
++	{0x4233, 0x05},
++	{0x4509, 0x0f},
++	{0x4505, 0x00},
++	{0x4501, 0xff},
++	{0x4502, 0x33},
++	{0x4503, 0x11},
++	{0x4501, 0xf0},
++	{0x4502, 0x30},
++	{0x4503, 0x10},
++	{0x3f3a, 0x2a},
++	{0x3f4f, 0x2b},
++	{0x3f51, 0x2e},
++	{0x3f53, 0x34},
++	{0x3f55, 0x38},
++	{0x4004, 0xd9},
++	{0x3a01, 0xc0},
++	{0x401e, 0x3c},
++	{0x401d, 0xa0},
++	{0x3f49, 0x70},
++	{0x3012, 0x03},
++	{0x3500, 0x13},
++	{0x3501, 0x03},
++	{0x3e00, 0x01},
++	{0x400d, 0x30},
++	{0x3508, 0x04},
++	{0x3513, 0x01},
++	{0x3514, 0x09},
++	{0x3515, 0x0b},
++	{0x3702, 0x80},
++	{0x3704, 0x80},
++	{0x3706, 0x80},
++	{0x3708, 0x80},
++	{0x3f36, 0xcd},
++	{0x400d, 0x30},
++	{0x4004, 0x68},
++	{0x4009, 0x09},
++	{0x400a, 0x48},
++	{0x3f0c, 0x30},
++	{0x3306, 0x01},
++	{0x3307, 0x84},
++	{0x3309, 0x01},
++	{0x3308, 0x04},
++	{0x3302, 0x00},
++	{0x330a, 0x07},
++	{0x330b, 0x07},
++	{0x310f, 0xe4},
++	{0x310e, 0x0c},
++	{0x310d, 0xdc},
++	{0x310c, 0x05},
++	{0x3115, 0x10},
++	{0x3114, 0x00},
++	{0x3117, 0x0f},
++	{0x3116, 0x0a},
++	{0x3111, 0xfc},
++	{0x3110, 0x00},
++	{0x3113, 0x9d},
++	{0x3112, 0x06},
++	{0x3006, 0x00},
++	{REG_NULL, 0x00},
++};
++
+ static const struct mis5001_mode supported_modes[] = {
+ 	{
++		.link_freq = MIS5001_LINK_FREQ_4MP,
++		.bits_per_sample = 12,
++		.width = 2560,
++		.height = 1440,
++		.max_fps = { .numerator = 1, .denominator = 30 },
++		.exp_def = 0x0040,
++		.hts_def = 0x0ce4,
++		.vts_def = 0x05dc,
++		.bus_fmt = MEDIA_BUS_FMT_SGRBG12_1X12,
++		.reg_list = mis5001_linear_12_2560x1440_30fps_regs,
++		.hdr_mode = NO_HDR,
++		.vc[PAD0] = V4L2_MBUS_CSI2_CHANNEL_0,
++	},
++	{
++		.link_freq = MIS5001_LINK_FREQ_4MP,
++		.bits_per_sample = 12,
++		.width = 2560,
++		.height = 1440,
++		.max_fps = { .numerator = 1, .denominator = 25 },
++		.exp_def = 0x0040,
++		.hts_def = 0x0f78,
++		.vts_def = 0x05dc,
++		.bus_fmt = MEDIA_BUS_FMT_SGRBG12_1X12,
++		.reg_list = mis5001_linear_12_2560x1440_25fps_regs,
++		.hdr_mode = NO_HDR,
++		.vc[PAD0] = V4L2_MBUS_CSI2_CHANNEL_0,
++	},
++	{
++		.link_freq = MIS5001_LINK_FREQ_5MP,
++		.bits_per_sample = 10,
+ 		.width = 2592,
+ 		.height = 1944,
+-		.max_fps = {
+-			.numerator = 10000,
+-			.denominator = 300000,
+-		},
++		.max_fps = { .numerator = 1, .denominator = 30 },
+ 		.exp_def = 0x0040,
+ 		.hts_def = 0xbb8,
+ 		.vts_def = 0x7bc,
+@@ -374,7 +760,8 @@ static const struct mis5001_mode supported_modes[] = {
+ };
+ 
+ static const s64 link_freq_menu_items[] = {
+-	MIS5001_LINK_FREQ
++	MIS5001_LINK_FREQ_4MP,
++	MIS5001_LINK_FREQ_5MP,
+ };
+ 
+ static const char * const mis5001_test_pattern_menu[] = {
+@@ -672,6 +1059,13 @@ static int mis5001_set_fmt(struct v4l2_subdev *sd,
+ 					 MIS5001_VTS_MAX - mode->height,
+ 					 1, vblank_def);
+ 		mis5001->cur_fps = mode->max_fps;
++		if (mis5001->link_freq)
++			__v4l2_ctrl_s_ctrl(mis5001->link_freq,
++				mode->link_freq == MIS5001_LINK_FREQ_4MP ? 0 : 1);
++		if (mis5001->pixel_rate)
++			__v4l2_ctrl_s_ctrl_int64(mis5001->pixel_rate,
++				mode->link_freq == MIS5001_LINK_FREQ_4MP ?
++				MIS5001_PIXEL_RATE_4MP : MIS5001_PIXEL_RATE_5MP);
+ 	}
+ 
+ 	mutex_unlock(&mis5001->mutex);
+@@ -1365,7 +1759,6 @@ static int mis5001_initialize_controls(struct mis5001 *mis5001)
+ {
+ 	const struct mis5001_mode *mode;
+ 	struct v4l2_ctrl_handler *handler;
+-	struct v4l2_ctrl *ctrl;
+ 	s64 exposure_max, vblank_def;
+ 	u32 h_blank;
+ 	int ret;
+@@ -1377,13 +1770,19 @@ static int mis5001_initialize_controls(struct mis5001 *mis5001)
+ 		return ret;
+ 	handler->lock = &mis5001->mutex;
+ 
+-	ctrl = v4l2_ctrl_new_int_menu(handler, NULL, V4L2_CID_LINK_FREQ,
+-				      0, 0, link_freq_menu_items);
+-	if (ctrl)
+-		ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+-
+-	v4l2_ctrl_new_std(handler, NULL, V4L2_CID_PIXEL_RATE,
+-			  0, PIXEL_RATE_WITH_337M_10BIT, 1, PIXEL_RATE_WITH_337M_10BIT);
++	mis5001->link_freq = v4l2_ctrl_new_int_menu(handler, NULL,
++					  V4L2_CID_LINK_FREQ,
++					  ARRAY_SIZE(link_freq_menu_items) - 1,
++					 mode->link_freq == MIS5001_LINK_FREQ_4MP ? 0 : 1,
++					 link_freq_menu_items);
++	if (mis5001->link_freq)
++		mis5001->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	mis5001->pixel_rate = v4l2_ctrl_new_std(handler, NULL,
++					 V4L2_CID_PIXEL_RATE,
++					 0, MIS5001_PIXEL_RATE_4MP, 1,
++					 mode->link_freq == MIS5001_LINK_FREQ_4MP ?
++					 MIS5001_PIXEL_RATE_4MP : MIS5001_PIXEL_RATE_5MP);
+ 
+ 	h_blank = mode->hts_def - mode->width;
+ 	mis5001->hblank = v4l2_ctrl_new_std(handler, NULL, V4L2_CID_HBLANK,
+diff --git a/project/app/rkipc/rkipc/src/rv1103_ipc/rkipc-mis5001-400w.ini b/project/app/rkipc/rkipc/src/rv1103_ipc/rkipc-mis5001-400w.ini
+new file mode 100644
+index 000000000..7087171b8
+--- /dev/null
++++ b/project/app/rkipc/rkipc/src/rv1103_ipc/rkipc-mis5001-400w.ini
+@@ -0,0 +1,530 @@
++[audio.0]
++enable = 1
++card_name = hw:0,0
++encode_type = G711A
++format = S16
++sample_rate = 8000
++channels = 1
++frame_size = 1152
++bit_rate = 16000
++input = mic_in
++volume = 50
++enable_aed = 0
++enable_bcd = 0
++enable_vqe = 1
++vqe_cfg = /oem/usr/share/vqefiles/config_aivqe.json
++
++[video.source]
++enable_aiq = 1
++enable_vo = 0
++vo_dev_id = 3 ; 0 is hdmi, 3 is mipi
++enable_ivs = 0
++enable_jpeg = 0
++enable_venc_0 = 1
++enable_venc_1 = 0
++enable_venc_2 = 0
++enable_npu = 0
++npu_fps = 10
++enable_wrap = 0
++buffer_line = 180
++enable_rtsp = 1
++enable_rtmp = 0
++rotation = 0 ; available value:0 90 180 270
++
++[video.0]
++buffer_size = 1572864
++buffer_count = 3
++enable_refer_buffer_share = 0
++stream_type = mainStream
++video_type = compositeStream
++max_width = 1920
++max_height = 1080
++width = 1920
++height = 1080
++rc_mode = CBR
++rc_quality = high
++src_frame_rate_den = 1
++src_frame_rate_num = 15
++dst_frame_rate_den = 1
++dst_frame_rate_num = 15
++target_rate = 0
++mid_rate = 2048
++max_rate = 3072
++min_rate = 0
++output_data_type = H.264
++smart = close
++h264_profile = high
++gop = 15
++smartp_viridrlen = 25
++gop_mode = normalP
++stream_smooth = 50
++enable_motion_deblur = 1
++enable_motion_static_switch = 0
++frame_min_i_qp = 26
++frame_min_qp = 28
++frame_max_i_qp = 51
++frame_max_qp = 51
++scalinglist = 0
++thrd_i = 0,0,0,0,3,3,5,5,8,8,8,15,15,20,25,25
++thrd_p = 0,0,0,0,3,3,5,5,8,8,8,15,15,20,25,25
++aq_step_i = -8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,7,8
++aq_step_p = -8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,7,8
++qbias_enable = 1
++qbias_i = 171
++qbias_p = 85
++flt_str_i = 0
++flt_str_p = 0
++
++[video.1]
++input_buffer_count = 1
++buffer_size = 202752 ; w * h / 2
++buffer_count = 4
++enable_refer_buffer_share = 1
++stream_type = subStream
++video_type = compositeStream
++max_width = 704
++max_height = 576
++width = 704
++height = 576
++rc_mode = CBR
++rc_quality = high
++src_frame_rate_den = 1
++src_frame_rate_num = 25
++dst_frame_rate_den = 1
++dst_frame_rate_num = 25
++target_rate = 0
++mid_rate = 256
++max_rate = 512
++min_rate = 0
++output_data_type = H.265
++smart = close
++h264_profile = high
++gop = 50
++smartp_viridrlen = 25
++gop_mode = normalP
++stream_smooth = 50
++enable_motion_deblur = 1
++enable_motion_static_switch = 0
++frame_min_i_qp = 26
++frame_min_qp = 28
++frame_max_i_qp = 51
++frame_max_qp = 51
++scalinglist = 0
++
++[video.2]
++max_width = 576
++max_height = 324
++width = 576
++height = 324
++
++[ivs]
++smear = 0
++weightp = 0
++md = 1
++od = 1
++md_sensibility = 3 ;available: 1 2 3,max 3
++
++[video.jpeg]
++width = 2560
++height = 1440
++jpeg_buffer_size = 1048576 ; 1024KB
++jpeg_qfactor = 70
++enable_cycle_snapshot = 0
++snapshot_interval_ms = 1000
++
++[isp]
++scenario = normal ; normal or custom1
++init_form_ini = 1
++normal_scene = day
++custom1_scene = night
++ircut_open_gpio = 58
++ircut_close_gpio = 57
++
++; isp.0
++[isp.0.adjustment]
++contrast    = 50
++brightness  = 50
++saturation  = 50
++sharpness  = 50
++fps = 15
++hue = 50
++
++[isp.0.exposure]
++iris_type = auto
++exposure_mode = auto
++gain_mode = auto
++auto_iris_level = 5
++auto_exposure_enabled = 1
++audo_gain_enabled = 1
++exposure_time = 1/6
++exposure_gain = 1
++
++[isp.0.night_to_day]
++night_to_day = day
++night_to_day_filter_level = 5
++night_to_day_filter_time = 5
++dawn_time = 07:00:00
++dusk_time = 18:00:00
++ircut_filter_action = day
++over_exposure_suppress = open
++over_exposure_suppress_type = auto
++fill_light_mode = IR
++brightness_adjustment_mode = auto
++light_brightness = 1
++distance_level = 1
++
++[isp.0.blc]
++blc_region = close
++blc_strength = 1
++wdr = close
++wdr_level = 0
++hdr = close
++hdr_level = 1
++hlc = close
++hlc_level = 0
++dark_boost_level = 0
++position_x = 0
++position_y = 0
++blc_region_width = 120
++blc_region_high = 92
++
++[isp.0.white_blance]
++white_blance_style = autoWhiteBalance
++white_blance_red = 50
++white_blance_green = 50
++white_blance_blue = 50
++
++[isp.0.enhancement]
++noise_reduce_mode = close
++denoise_level = 50
++spatial_denoise_level = 50
++temporal_denoise_level = 50
++dehaze = close
++dehaze_level = 0
++dis = close
++gray_scale_mode = [0-255]
++distortion_correction = close
++ldch_level = 0
++
++[isp.0.video_adjustment]
++image_flip = close
++scene_mode = indoor
++power_line_frequency_mode = PAL(50HZ)
++
++[isp.0.auto_focus]
++af_mode = semi-auto
++zoom_level = 0
++focus_level = 0
++
++; isp.1
++[isp.1.adjustment]
++contrast    = 50
++brightness  = 75
++saturation  = 50
++sharpness  = 50
++fps = 25
++hue = 50
++
++[isp.1.exposure]
++iris_type = auto
++exposure_mode = auto
++gain_mode = auto
++auto_iris_level = 5
++auto_exposure_enabled = 1
++audo_gain_enabled = 1
++exposure_time = 1/6
++exposure_gain = 1
++
++[isp.1.night_to_day]
++night_to_day = day
++night_to_day_filter_level = 5
++night_to_day_filter_time = 5
++dawn_time = 07:00:00
++dusk_time = 18:00:00
++ircut_filter_action = day
++over_exposure_suppress = open
++over_exposure_suppress_type = auto
++fill_light_mode = IR
++brightness_adjustment_mode = auto
++light_brightness = 1
++distance_level = 1
++
++[isp.1.blc]
++blc_region = close
++blc_strength = 1
++wdr = close
++wdr_level = 0
++hdr = close
++hdr_level = 1
++hlc = close
++hlc_level = 0
++dark_boost_level = 0
++position_x = 0
++position_y = 0
++blc_region_width = 120
++blc_region_high = 92
++
++[isp.1.white_blance]
++white_blance_style = autoWhiteBalance
++white_blance_red = 50
++white_blance_green = 50
++white_blance_blue = 50
++
++[isp.1.enhancement]
++noise_reduce_mode = close
++denoise_level = 50
++spatial_denoise_level = 50
++temporal_denoise_level = 50
++dehaze = close
++dehaze_level = 0
++dis = close
++gray_scale_mode = [0-255]
++distortion_correction = close
++ldch_level = 0
++
++[isp.1.video_adjustment]
++image_flip = close
++scene_mode = indoor
++power_line_frequency_mode = PAL(50HZ)
++
++[isp.1.auto_focus]
++af_mode = semi-auto
++zoom_level = 0
++focus_level = 0
++
++[storage]
++mount_path = /userdata
++free_size_del_min = 500; MB
++free_size_del_max = 1000; MB
++num_limit_enable = 1; limit by file num
++
++[storage.0]
++enable = 0
++folder_name = video0
++file_format = mp4 ; flv,ts
++file_duration = 60
++video_quota = 30
++file_max_num = 300
++
++[storage.1]
++enable = 0
++folder_name = video1
++file_format = mp4 ; flv,ts
++file_duration = 60
++video_quota = 30
++file_max_num = 300
++
++[storage.2]
++enable = 0
++folder_name = video2
++file_format = mp4 ; flv,ts
++file_duration = 60
++video_quota = 30
++file_max_num = 300
++
++[system.device_info]
++deivce_name = RK IP Camera
++telecontrol_id = 88
++model = RK-003
++serial_number = RK-003-A
++firmware_version = V0.2.6 build 202108
++encoder_version = V1.0 build 202108
++web_version = V2.12.2 build 202108
++plugin_version = V1.0.0.0
++channels_number = 1
++hard_disks_number = 1
++alarm_inputs_number = 0
++alarm_outputs_number = 0
++firmware_version_info = CP-3-B
++manufacturer = Rockchip
++hardware_id = c3d9b8674f4b94f6
++user_num = 1
++
++[capability.video]
++0 = {"disabled":[{"name":"sStreamType","options":{"subStream":{"sSmart":"close"},"thirdStream":{"sSmart":"close"}},"type":"disabled/limit"},{"name":"sRCMode","options":{"CBR":{"sRCQuality":null}},"type":"disabled"},{"name":"sOutputDataType","options":{"H.265":{"sH264Profile":null}},"type":"disabled"},{"name":"unspport","options":{"iStreamSmooth":null,"sVideoType":null},"type":"disabled"}],"dynamic":{"sSmart":{"open":{"iMinRate":{"dynamicRange":{"max":"iMaxRate","maxRate":1,"min":"iMaxRate","minRate":0.125},"type":"dynamicRange"}}},"sStreamType":{"mainStream":{"iMaxRate":{"options":[256,512,1024,2048,3072,4096,6144],"type":"options"},"sResolution":{"options":["2560*1440","1920*1080","1280*720","960*540","640*360","320*240"],"type":"options"}},"subStream":{"iMaxRate"
++1 = :{"options":[128,256,512],"type":"options"},"sResolution":{"options":["704*576","640*480","352*288","320*240"],"type":"options"}},"thirdStream":{"iMaxRate":{"options":[256,512],"type":"options"},"sResolution":{"options":["416*416"],"type":"options"}}}},"layout":{"encoder":["sStreamType","sVideoType","sResolution","sRCMode","sRCQuality","sFrameRate","sOutputDataType","sSmart","sH264Profile","sGOPMode","iMaxRate","iGOP","iStreamSmooth"]},"static":{"iGOP":{"range":{"max":400,"min":1},"type":"range"},"iStreamSmooth":{"range":{"max":100,"min":1,"step":1},"type":"range"},"sFrameRate":{"dynamicRange":{"max":"sFrameRateIn","maxRate":1},"options":["1","2","4","6","8","10","12","14","16","18","20","25","30"],"type":"options/dynamicRange"},"sH264Profile":{"options":["high","main","baseline"],"type":"options"},"sOutputDataType":{"options"
++2 = :["H.264","H.265"],"type":"options"},"sRCMode":{"options":["CBR","VBR"],"type":"options"},"sRCQuality":{"options":["lowest","lower","low","medium","high","higher","highest"],"type":"options"},"sGOPMode":{"options":["normalP","smartP"],"type":"options"},"sSmart":{"options":["open","close"],"type":"options"},"sStreamType":{"options":["mainStream","subStream","thirdStream"],"type":"options"},"sVideoType":{"options":["videoStream","compositeStream"],"type":"options"}}}
++
++[capability.image_adjustment]
++0 = {"layout":{"image_adjustment":["iBrightness","iContrast","iSaturation","iSharpness","iHue"]},"static":{"iBrightness":{"range":{"max":100,"min":0,"step":1},"type":"range"},"iContrast":{"range":{"max":100,"min":0,"step":1},"type":"range"},"iHue":{"range":{"max":100,"min":0,"step":1},"type":"range"},"iSaturation":{"range":{"max":100,"min":0,"step":1},"type":"range"},"iSharpness":{"range":{"max":100,"min":0,"step":1},"type":"range"}}}
++
++[capability.image_blc]
++0 = {"disabled":[{"name":"sHLC","options":{"open":{"sBLCRegion":null}},"type":"disabled"},{"name":"sBLCRegion","options":{"open":{"iDarkBoostLevel":null,"iHLCLevel":null,"sHLC":null}},"type":"disabled"}],"dynamic":{"sBLCRegion":{"open":{"iBLCStrength":{"range":{"max":100,"min":0,"step":1},"type":"range"}}},"sHDR":{"HDR2":{"iHDRLevel":{"options":[1,2,3,4],"type":"options"}},"close":{"sBLCRegion":{"options":["close","open"],"type":"options"},"sHLC":{"options"
++1 = :["close","open"],"type":"options"}}},"sHLC":{"open":{"iDarkBoostLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"},"iHLCLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"}}},"sWDR":{"open":{"iWDRLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"}}}},"layout":{"image_blc":["sHDR","iHDRLevel","sBLCRegion","iBLCStrength","sHLC","iHLCLevel"]},"static":{"sHDR":{"options":["close","HDR2"],"type":"options"}}}
++
++[capability.image_enhancement]
++0 = {"dynamic":{"sDehaze":{"open":{"iDehazeLevel":{"range":{"max":10,"min":0,"step":1},"type":"range"}}},"sDistortionCorrection":{"FEC":{"iFecLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"}},"LDCH":{"iLdchLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"}}},"sNoiseReduceMode":{"2dnr":{"iSpatialDenoiseLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"}},"3dnr":{"iTemporalDenoiseLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"}},"mixnr":{"iSpatialDenoiseLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"},"iTemporalDenoiseLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"}}}},"layout"
++1 = :{"image_enhancement":["sNoiseReduceMode","iSpatialDenoiseLevel","iTemporalDenoiseLevel","sDehaze","iDehazeLevel","sGrayScaleMode","sDistortionCorrection","iLdchLevel","iFecLevel"]},"static":{"sDIS":{"options":["open","close"],"type":"options"},"sDehaze":{"options":["open","close","auto"],"type":"options"},"sDistortionCorrection":{"options":["LDCH","close"],"type":"options"},"sFEC":{"options":["open","close"],"type":"options"},"sGrayScaleMode":{"options":["[0-255]","[16-235]"],"type":"options"},"sNoiseReduceMode":{"options":["close","2dnr","3dnr","mixnr"],"type":"options"}}}
++
++[capability.image_exposure]
++0 = {"dynamic":{"sExposureMode":{"auto":{"iAutoIrisLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"}},"manual":{"sExposureTime":{"options":["1","1/3","1/6","1/12","1/25","1/50","1/100","1/150","1/200","1/250","1/500","1/750","1/1000","1/2000","1/4000","1/10000","1/100000"],"type":"options"},"sGainMode":{"options":["auto","manual"],"type":"options"}}},"sGainMode":{"manual":{"iExposureGain":{"range":{"max":100,"min":1,"step":1},"type":"range"}}}},"layout":{"image_exposure":["sExposureMode","sExposureTime","sGainMode","iExposureGain","iFPS"]},"static":{"sExposureMode":{"options":["auto","manual"],"type":"options"},"iFPS":{"range":{"max":30,"min":0,"step":1},"type":"range"}}}
++
++[capability.image_night_to_day]
++0 = {"disabled":[{"name":"sNightToDay","options":{"day":{"iLightBrightness":null,"sFillLightMode":null},"night":{"iDarkBoostLevel":null,"iHDRLevel":null,"iHLCLevel":null,"sHDR":null,"sHLC":"close"}},"type":"disabled"}],"dynamic":{"sNightToDay":{"auto":{"iNightToDayFilterLevel":{"options":[0,1,2,3,4,5,6,7],"type":"options"},"iNightToDayFilterTime":{"range":{"max":10,"min":3,"step":1},"type":"range"}},"schedule":{"sDawnTime":{"input":"time","type":"input"},"sDuskTime":{"input":"time","type":"input"}}},"sOverexposeSuppress":{"open"
++1 = :{"sOverexposeSuppressType":{"options":["auto","manual"],"type":"options"}}},"sOverexposeSuppressType":{"manual":{"iDistanceLevel":{"range":{"max":100,"min":0,"step":1},"type":"range"}}}},"layout":{"image_night_to_day":["sNightToDay","iNightToDayFilterLevel","iNightToDayFilterTime","sDawnTime","sDuskTime","sFillLightMode","iLightBrightness"]},"static":{"iLightBrightness":{"range":{"max":100,"min":0,"step":10},"type":"range"},"sNightToDay":{"options":["day","night"],"type":"options"},"sFillLightMode":{"type":"options","options":["IR"]}}}
++
++[capability.image_video_adjustment]
++0 = {"layout":{"image_video_adjustment":["sPowerLineFrequencyMode","sImageFlip","iImageRotation"]},"static":{"sImageFlip":{"options":["close","flip","mirror","centrosymmetric"],"type":"options"},"sPowerLineFrequencyMode":{"options":["PAL(50HZ)","NTSC(60HZ)"],"type":"options"},"sSceneMode":{"options":["indoor","outdoor"],"type":"options"},"iImageRotation":{"options":[0],"type":"options"}}}
++
++[capability.image_white_blance]
++0 = {"dynamic":{"sWhiteBlanceStyle":{"manualWhiteBalance":{"iWhiteBalanceBlue":{"range":{"max":100,"min":0,"step":1},"type":"range"},"iWhiteBalanceGreen":{"range":{"max":100,"min":0,"step":1},"type":"range"},"iWhiteBalanceRed":{"range":{"max":100,"min":0,"step":1},"type":"range"}}}},"layout":{"image_white_blance":["sWhiteBlanceStyle","iWhiteBalanceRed","iWhiteBalanceGreen","iWhiteBalanceBlue"]},"static":{"sWhiteBlanceStyle":{"options":["manualWhiteBalance","autoWhiteBalance","lockingWhiteBalance","fluorescentLamp","incandescent","warmLight","naturalLight"],"type":"options"}}}
++
++[user.0]
++user_name = admin
++password = YWRtaW4=
++user_level = 1 ; administrator=0 operator=1 user=2
++
++[osd.common]
++enable_osd = 0
++is_presistent_text = 1
++attribute = transparent/not-flashing
++font_size = 32
++font_color_mode = customize
++font_color = fff799
++alignment = customize
++boundary = 0
++font_path = /oem/usr/share/simsun_en.ttf
++normalized_screen_width = 704
++normalized_screen_height = 480
++
++[osd.0]
++type = channelName
++enabled = 0
++position_x = 1104
++position_y = 640
++display_text = Camera 01
++
++[osd.1]
++type = dateTime
++enabled = 1
++position_x = 16
++position_y = 16
++date_style = CHR-YYYY-MM-DD
++time_style = 24hour
++display_week_enabled = 0
++
++[osd.2]
++type = character
++enabled = 0
++position_x = 0
++position_y = 0
++display_text = null
++
++[osd.3]
++type = character
++enabled = 0
++position_x = 0
++position_y = 0
++display_text = null
++
++[osd.4]
++type = privacyMask
++enabled = 0
++position_x = 0
++position_y = 0
++width = 0
++height = 0
++
++[osd.5]
++type = privacyMask
++enabled = 0
++position_x = 0
++position_y = 0
++width = 0
++height = 0
++
++[osd.6]
++type = image
++enabled = 0
++position_x = 16
++position_y = 640
++image_path = /userdata/image.bmp
++
++[event.regional_invasion]
++enabled = 1
++position_x = 0
++position_y = 0
++width = 700
++height = 560
++proportion = 1
++sensitivity_level = 90
++time_threshold = 1
++rockiva_model_type = small ;big medium  small
++
++[roi.0]
++stream_type = mainStream
++id = 1
++enabled = 0
++name = test
++position_x = 0
++position_y = 0
++width = 0
++height = 0
++quality_level = 3
++
++[roi.1]
++stream_type = mainStream
++id = 2
++enabled = 0
++name = test
++position_x = 0
++position_y = 0
++width = 0
++height = 0
++quality_level = 3
++
++[roi.2]
++stream_type = subStream
++id = 1
++enabled = 0
++name = test
++position_x = 0
++position_y = 0
++width = 0
++height = 0
++quality_level = 3
++
++[roi.3]
++stream_type = subStream
++id = 2
++enabled = 0
++name = test
++position_x = 0
++position_y = 0
++width = 0
++height = 0
++quality_level = 3
++
++[roi.4]
++stream_type = thirdStream
++id = 1
++enabled = 0
++name = test
++position_x = 0
++position_y = 0
++width = 0
++height = 0
++quality_level = 3
++
++[roi.5]
++stream_type = thirdStream
++id = 2
++enabled = 0
++name = test
++position_x = 0
++position_y = 0
++width = 0
++height = 0
++quality_level = 3
++
++[region_clip.1]
++enabled = 0
++position_x = 0
++position_y = 0
++width = 640
++height = 480
++
++[network.ntp]
++enable = 1
++refresh_time_s = 60
++ntp_server = 119.28.183.184

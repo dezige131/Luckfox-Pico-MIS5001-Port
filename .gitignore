@@ -1,0 +1,7 @@
+# Local build outputs (firmware is built in the SDK, not in this repository).
+dist/
+*.ko
+*.dtbo
+*.raw
+*.h264
+*.log
